@@ -27,6 +27,4 @@ namespace Manager {
 		logger::info("Manager: Exiting, InstallHooks finished and {} Initialization finished.", modName);
 		return;
 	}
-
-
 }

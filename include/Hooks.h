@@ -7,8 +7,9 @@
 
 namespace Hooks {
     void InstallHooks();
-	void InitiateLegacyBlur();
-    void FindAndCloneDoFTemplate();
+	void InitiateLegacyBlur(RE::TESImageSpace& imageSpace);
+    void CreateDOFForm();
+    void SetIModDefaults();
 
     struct UpdateHook {
         static void Update(RE::Actor* a_this, float a_delta);

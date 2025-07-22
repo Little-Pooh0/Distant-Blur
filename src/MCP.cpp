@@ -77,14 +77,6 @@ namespace MCP {
 						ImGui::TableSetupColumn("Remove", ImGuiTableColumnFlags_WidthStretch);
 
 
-						// Pass in the preview value visible before opening the combo (it could technically be different contents or not pulled from items[])
-						/*auto skyWeather = RE::Sky::GetSingleton()->currentWeather;
-						if (skyWeather != nullptr) {
-							skyWeatherName = clib_util::editorID::get_editorID(skyWeather);
-						} else {
-							skyWeatherName = "None";
-							logger::warn("Current weather is null, cannot set weather type.");
-						}*/
 						for (row = 0; row < weatherSettings.size(); row++) {
 							// Manually draw the header row
 							if (row == 0) {

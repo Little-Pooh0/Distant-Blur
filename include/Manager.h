@@ -8,5 +8,4 @@
 
 namespace Manager {
 	void Initialize();
-	void MainThread();
 }

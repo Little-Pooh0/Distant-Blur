@@ -1,8 +1,6 @@
 #include "Hooks.h"
 
-RE::TESImageSpaceModifier* iMod;
-//RE::ImageSpaceModifierInstanceForm* iModInstance;
-RE::ImageSpaceModifierInstanceForm* iModInstance = nullptr;
+RE::TESImageSpace* iMod;
 
 namespace Hooks {
 
@@ -10,7 +8,7 @@ namespace Hooks {
 		logger::info("InstallHooks: Entering.");
 
 		// --- Replace all previous creation logic with our new robust finder ---
-		FindAndCloneDoFTemplate();
+		CreateDOFForm();
 
 		// Only install hooks if we successfully created our iMod.
 		if (iMod) {
@@ -21,6 +19,21 @@ namespace Hooks {
 		else {
 			logger::error("InstallHooks: Aborting hook installation because runtime IMOD could not be created.");
 		}
+	}
+
+	void CreateDOFForm() {
+		if (!iMod) {
+			iMod = RE::IFormFactory::Create<RE::TESImageSpace>();
+
+			if (iMod) {
+				logger::info("Successfully cloned template. Our private runtime IMOD is ready. FormID: {}", iMod->GetFormID());
+				iMod->SetFormEditorID("DistantBlurImageSpaceModifier");
+			}
+			else {
+				logger::error("Failed to clone the found template!");
+			}
+		}
+		return;
 	}
 
 	void UpdateHook::Install()
@@ -35,42 +48,42 @@ namespace Hooks {
 		logger::info("UpdateHook: installing Update_");
 		Update_(a_this, a_delta);
 		logger::info("UpdateHook: Update_ called, now checking for blur initiation.");
-		InitiateLegacyBlur();
+		RE::ImageSpaceManager::GetSingleton()->GetRuntimeData().currentBaseData = &iMod->data;
+		SetIModDefaults();
+		InitiateLegacyBlur(*iMod);
 		logger::info("UpdateHook: InitiateLegacyBlur called, returning from Update.");
 	}
 
-	void FindAndCloneDoFTemplate() {
-		if (iMod) return; // Already created.
-
-		logger::info("Searching for a suitable DoF IMOD template to clone...");
-		auto* dataHandler = RE::TESDataHandler::GetSingleton();
-		if (!dataHandler) return;
-
-		// Iterate through all Image Space Modifiers in the game data.
-		for (auto* templateIMOD : dataHandler->GetFormArray<RE::TESImageSpaceModifier>()) {
-			// We are looking for a template that has the exact pointers we need.
-			if (templateIMOD && templateIMOD->dof.strength && templateIMOD->dof.range) {
-
-				logger::info("Found suitable template IMOD: '{}' (FormID: {:#x})", templateIMOD->GetFormEditorID(), templateIMOD->GetFormID());
-
-				// We found one! Clone it and store it in our global iMod.
-				iMod = templateIMOD->CreateDuplicateForm(true, nullptr)->As<RE::TESImageSpaceModifier>();
-
-				if (iMod) {
-					logger::info("Successfully cloned template. Our private runtime IMOD is ready.");
-					iMod->SetFormEditorID("DistantBlurImageSpaceModifier");
-				}
-				else {
-					logger::error("Failed to clone the found template!");
-				}
-
-				// We've found what we need, so we can stop searching.
-				return;
-			}
+	void SetIModDefaults() {
+		using namespace MCP::Advanced::Legacy;
+		logger::info("SetIModDefaults: Entering, setting default values for ImageSpaceModifier.");
+		if (!iMod) {
+			logger::error("SetIModDefaults: iMod is null, cannot set defaults.");
+			return;
 		}
-		logger::error("FATAL: Could not find any IMOD in the game data suitable for cloning for DoF effects!");
+		iMod->data.hdr.eyeAdaptSpeed = 3.0f; // Default eye adaptation speed
+		iMod->data.hdr.eyeAdaptStrength = 3.0f; // Default eye adaptation strength
+		iMod->data.hdr.bloomBlurRadius = 7.0f; // Default bloom blur radius
+		iMod->data.hdr.bloomThreshold = 0.6f; // Default bloom threshold
+		iMod->data.hdr.bloomScale = 0.5f; // Default bloom scale
+		iMod->data.hdr.receiveBloomThreshold = 0.15f; // Default receive bloom threshold
+		iMod->data.hdr.white = 0.15f; // Default white point
+		iMod->data.hdr.sunlightScale = 1.8f; // Default sunlight scale
+		iMod->data.hdr.skyScale = 1.5f; // Default sky scale
+
+		iMod->data.cinematic.saturation = 0.9f; // Default saturation
+		iMod->data.cinematic.brightness = 1.5f; // Default brightness
+		iMod->data.cinematic.contrast = 1.1f; // Default contrast
+
+
+		iMod->data.depthOfField.strength = 0.0f; // Default strength
+		iMod->data.depthOfField.distance = 0.0f; // Default focal point
+		iMod->data.depthOfField.range = 0.0f; // Default range
 	}
-	void InitiateLegacyBlur() {
+
+
+
+	void InitiateLegacyBlur(RE::TESImageSpace& imageSpace) {
 		using namespace MCP::Advanced::Legacy;
 
 		logger::info("InitiateLegacyBlur: Weather Current weather type is: {}", Utils::GetCurrentWeather());
@@ -82,13 +95,7 @@ namespace Hooks {
 
 		// Check if the weather was actually found in our settings.
 		if (vectorCurrentWeather == weatherSettings.end()) {
-			// Not found. We should probably stop any existing effect and then exit.
-			if (iModInstance) {
-				RE::ImageSpaceModifierInstanceForm::Stop(iMod);
-				iModInstance = nullptr;
-				logger::info("InitiateLegacyBlur: No matching weather found, stopped existing ImageSpaceModifierInstanceForm.");
-			}
-			return; // Exit the function.
+			return;
 		}
 
 		// If we get here, 'vectorCurrentWeather' points to a valid row. Calculate the index.
@@ -98,41 +105,12 @@ namespace Hooks {
 		float strengthToSet = weatherSettings[rowOfWeather].rowBlurStrength;
 		float rangeToSet = weatherSettings[rowOfWeather].rowBlurRange;
 
-		if (!iMod) {
-			logger::error("Cannot initiate blur, base iMod is null!");
-			return;
-		}
 		logger::info("Setting ImageSpaceModifier strength to: {}", strengthToSet);
-		iMod->dof.strength->floatValue = strengthToSet; // Create a new NiFloatData with one key.
-		//iMod->dof.strength->floatData->keys[0] = RE::NiFloatKey(0.0f, strengthToSet);
-		//logger::info("did the thing");
-		//logger::info("{}", iMod->data.dof.strength);
-		if (iMod->dof.strength && iMod->dof.strength->floatData) {
-			// The first key [0] holds the value for non-animated effects.
-			iMod->dof.strength->floatData->keys[0].SetValue(strengthToSet);
-		}
-		else {
-			logger::error("iMod->dof.strength or its floatData is null!");
-		}
+		logger::info("Setting ImageSpaceModifier range to: {}", rangeToSet);
+		imageSpace.data.depthOfField.strength = strengthToSet;
+		imageSpace.data.depthOfField.range = rangeToSet;
+		logger::info("Values should be equal {}", imageSpace.data.depthOfField.strength, imageSpace.data.depthOfField.range);
 
-		if (iMod->dof.range && iMod->dof.range->floatData) {
-			iMod->dof.range->floatData->keys[0] = RE::NiFloatKey(0.0f, rangeToSet);
-		}
-		else {
-			logger::error("iMod->dof.range or its floatData is null!");
-		}
-		logger::info("Set runtime IMOD properties: DoF Strength = {}, Range = {}", strengthToSet, rangeToSet);
-
-		if (iModInstance) {
-			RE::ImageSpaceModifierInstanceForm::Stop(iMod);
-			iModInstance = nullptr; // The old instance is now invalid.
-		}
-		iModInstance = RE::ImageSpaceModifierInstanceForm::Trigger(iMod, 1.0f, nullptr);
-		if (iModInstance) {
-			logger::info("Successfully triggered new IMOD instance.");
-		} else {
-			logger::error("Failed to trigger new IMOD instance.");
-		}
 		return;
 	}
 
