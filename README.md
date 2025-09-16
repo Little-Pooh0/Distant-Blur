@@ -1,3 +1,5 @@
+Currently very WIP and broken at the moment. Do NOT reference this code until a release has been published, or this message is removed or crossed out.
+
 #### YOU NEED CMAKE < 3.5 !
 
 #### WINDOWS ENVIRONMENT VARIABLES TO SET
@@ -24,3 +26,4 @@
 Automatically imports:
 - [CLibUtil](https://github.com/powerof3/CLibUtil) by powerof3
 - [SKSE Menu Framework](https://www.nexusmods.com/skyrimspecialedition/mods/120352) by Thiago099
+
